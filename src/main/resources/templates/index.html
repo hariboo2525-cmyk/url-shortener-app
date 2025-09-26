@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html lang="ja" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>URL Shortener</title>
+</head>
+<body>
+<h1>URL Shortener</h1>
+<form action="/shorten" method="post">
+    <input type="url" name="originalUrl" placeholder="短くしたいURLを入力" required size="50">
+    <button type="submit">短縮！</button>
+</form>
+</body>
+</html>

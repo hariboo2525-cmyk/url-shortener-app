@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html lang="ja" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Shortened URL</title>
+</head>
+<body>
+<h1>生成されたURL</h1>
+<p>
+    <a th:href="${shortenedUrl}" th:text="${shortenedUrl}" target="_blank"></a>
+</p>
+<a href="/">別のURLを短縮する</a>
+</body>
+</html>
