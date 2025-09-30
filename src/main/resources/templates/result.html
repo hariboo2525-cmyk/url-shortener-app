@@ -2,13 +2,20 @@
 <html lang="ja" xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
-    <title>Shortened URL</title>
+    <title>短縮URLが生成されました</title>
 </head>
 <body>
 <h1>生成されたURL</h1>
 <p>
     <a th:href="${shortenedUrl}" th:text="${shortenedUrl}" target="_blank"></a>
 </p>
+<hr>
+<p>
+    <a th:href="@{/analytics/{code}(code=${shortCode})}">
+        このURLのクリック数を確認する (分析ダッシュボード)
+    </a>
+</p>
+<hr>
 <a href="/">別のURLを短縮する</a>
 </body>
 </html>

@@ -1,15 +1,23 @@
 package com.bonsai.shorturl;
 
-import org.springframework.beans.factory.annotation.Autowired;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
+import java.security.Principal;
+import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -17,43 +25,171 @@ import java.util.UUID;
 @Controller
 public class ShortUrlApplication {
 
-    @Autowired
-    private UrlMappingRepository urlMappingRepository;
+    private final UrlMappingRepository urlMappingRepository;
+    private final ClickEventRepository clickEventRepository;
+
+    public ShortUrlApplication(UrlMappingRepository urlMappingRepository, ClickEventRepository clickEventRepository) {
+        this.urlMappingRepository = urlMappingRepository;
+        this.clickEventRepository = clickEventRepository;
+    }
 
     public static void main(String[] args) {
         SpringApplication.run(ShortUrlApplication.class, args);
     }
 
     @GetMapping("/")
-    public String index() {
+    public String index(Model model, Principal principal) {
+        if (principal != null) {
+            model.addAttribute("username", principal.getName());
+        }
         return "index";
     }
 
     @PostMapping("/shorten")
-    public String shortenUrl(@RequestParam("originalUrl") String originalUrl, Model model) {
+    public String shortenUrl(@RequestParam("originalUrl") String originalUrl,
+                             @RequestParam(value = "customCode", required = false) String customCode,
+                             @RequestParam(value = "expirationTimestamp", required = false)
+                             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime expirationTimestamp,
+                             Model model) {
+
         String shortCode;
-        do {
-            shortCode = UUID.randomUUID().toString().substring(0, 6);
-        } while (urlMappingRepository.findByShortCode(shortCode).isPresent());
+        if (customCode != null && !customCode.trim().isEmpty()) {
+            if (urlMappingRepository.findByShortCode(customCode).isPresent()) {
+                model.addAttribute("error", "このカスタムURLはすでに使用されています: " + customCode);
+                return "index";
+            }
+            shortCode = customCode.trim();
+        } else {
+            do {
+                shortCode = UUID.randomUUID().toString().substring(0, 6);
+            } while (urlMappingRepository.findByShortCode(shortCode).isPresent());
+        }
 
         UrlMapping urlMapping = new UrlMapping(shortCode, originalUrl);
+        if (expirationTimestamp != null) {
+            urlMapping.setExpirationTimestamp(expirationTimestamp);
+        }
         urlMappingRepository.save(urlMapping);
 
         String shortenedUrl = "http://localhost:8080/" + shortCode;
         model.addAttribute("shortenedUrl", shortenedUrl);
+        model.addAttribute("shortCode", shortCode);
 
         return "result";
     }
 
     @GetMapping("/{shortCode}")
-    public String redirectToOriginalUrl(@PathVariable("shortCode") String shortCode) {
+    public String redirectToOriginalUrl(@PathVariable("shortCode") String shortCode, HttpServletRequest request) {
         Optional<UrlMapping> urlMappingOptional = urlMappingRepository.findByShortCode(shortCode);
 
         if (urlMappingOptional.isPresent()) {
             UrlMapping urlMapping = urlMappingOptional.get();
+
+            if (urlMapping.getExpirationTimestamp() != null && LocalDateTime.now().isAfter(urlMapping.getExpirationTimestamp())) {
+                return "expired";
+            }
+
+            String ipAddress = request.getRemoteAddr();
+            if ("0:0:0:0:0:0:0:1".equals(ipAddress) || "127.0.0.1".equals(ipAddress)) {
+                ipAddress = "8.8.8.8";
+            }
+
+            String apiUrl = "http://ip-api.com/json/" + ipAddress;
+            RestTemplate restTemplate = new RestTemplate();
+            IpApiResponse response = restTemplate.getForObject(apiUrl, IpApiResponse.class);
+
+            String country = (response != null && response.getCountry() != null) ? response.getCountry() : "Unknown";
+            String city = (response != null && response.getCity() != null) ? response.getCity() : "Unknown";
+
+            String referrer = request.getHeader("Referer");
+            if (referrer == null || referrer.isEmpty()) {
+                referrer = "Direct";
+            }
+
+            String userAgent = request.getHeader("User-Agent");
+            String deviceType = "Desktop";
+            if (userAgent != null && (userAgent.toLowerCase().contains("mobile") || userAgent.toLowerCase().contains("android") || userAgent.toLowerCase().contains("iphone"))) {
+                deviceType = "Mobile";
+            }
+
+            ClickEvent clickEvent = new ClickEvent(urlMapping, LocalDateTime.now(), country, city, referrer, deviceType);
+            clickEventRepository.save(clickEvent);
+
+            urlMapping.incrementClickCount();
+            urlMappingRepository.save(urlMapping);
+
             return "redirect:" + urlMapping.getOriginalUrl();
         } else {
             return "error/404";
         }
+    }
+
+
+    @GetMapping("/analytics/{shortCode}")
+    public String showAnalytics(@PathVariable("shortCode") String shortCode,
+                                @RequestParam(defaultValue = "0") int page,
+                                Model model) {
+        Optional<UrlMapping> urlMappingOptional = urlMappingRepository.findByShortCode(shortCode);
+
+        if (urlMappingOptional.isPresent()) {
+            UrlMapping urlMapping = urlMappingOptional.get();
+            model.addAttribute("urlMapping", urlMapping);
+
+            Pageable pageable = PageRequest.of(page, 10);
+            Page<ClickEvent> clickEventsPage = clickEventRepository.findByUrlMappingOrderByClickTimestampDesc(urlMapping, pageable);
+
+            model.addAttribute("clickEventsPage", clickEventsPage);
+
+            return "analytics";
+        } else {
+            return "error/404";
+        }
+    }
+
+    @GetMapping("/edit/{shortCode}")
+    public String showEditPage(@PathVariable("shortCode") String shortCode, Model model) {
+        Optional<UrlMapping> urlMappingOptional = urlMappingRepository.findByShortCode(shortCode);
+        if (urlMappingOptional.isPresent()) {
+            model.addAttribute("urlMapping", urlMappingOptional.get());
+            return "edit";
+        } else {
+            return "error/404";
+        }
+    }
+
+    @PostMapping("/update")
+    public String updateUrl(@RequestParam("shortCode") String shortCode,
+                            @RequestParam("originalUrl") String newOriginalUrl,
+                            RedirectAttributes redirectAttributes) {
+        Optional<UrlMapping> urlMappingOptional = urlMappingRepository.findByShortCode(shortCode);
+        if (urlMappingOptional.isPresent()) {
+            UrlMapping urlMapping = urlMappingOptional.get();
+            urlMapping.setOriginalUrl(newOriginalUrl);
+            urlMappingRepository.save(urlMapping);
+            return "redirect:/analytics/" + shortCode;
+        } else {
+            return "error/404";
+        }
+    }
+}
+
+class IpApiResponse {
+    private String country;
+    private String city;
+
+    public String getCountry() {
+        return country;
+    }
+
+    public void setCountry(String country) {
+        this.country = country;
+    }
+
+    public String getCity() {
+        return city;
+    }
+
+    public void setCity(String city) {
+        this.city = city;
     }
 }

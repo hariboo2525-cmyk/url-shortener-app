@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ja" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>リンクの編集</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            text-align: center;
+            margin-top: 50px;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: auto;
+        }
+
+        input[type="url"] {
+            padding: 10px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        input[type="text"] {
+            background-color: #eee;
+        }
+
+        button {
+            padding: 10px 20px;
+            margin-top: 15px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+            text-align: left;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>リンクの編集</h1>
+    <form action="/update" method="post" th:object="${urlMapping}">
+        <input type="hidden" name="shortCode" th:value="*{shortCode}">
+        <div class="form-group">
+            <label>短縮URL</label>
+            <input type="text" th:value="@{'http://localhost:8080/' + *{shortCode}}" readonly>
+        </div>
+        <div class="form-group">
+            <label for="originalUrl">元のURL</label>
+            <input type="url" id="originalUrl" name="originalUrl" th:value="*{originalUrl}" required size="50"
+                   onclick="this.select();">
+        </div>
+        <div>
+            <button type="submit">更新する</button>
+        </div>
+    </form>
+    <div style="margin-top: 20px;">
+        <a th:href="@{/analytics/{code}(code=*{shortCode})}">キャンセルして分析ページに戻る</a>
+    </div>
+</div>
+</body>
+</html>

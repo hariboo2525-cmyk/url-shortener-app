@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="ja" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>分析ダッシュボード</title>
+    <style>
+        /* CSSは前回から変更なし */
+        body {
+            font-family: sans-serif;
+            margin: 40px;
+            background-color: #f4f7f6;
+        }
+
+        .dashboard {
+            max-width: 800px;
+            margin: auto;
+        }
+
+        .card {
+            background-color: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+
+        h2 {
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+            color: #555;
+        }
+
+        .stat {
+            font-size: 3em;
+            font-weight: bold;
+            text-align: center;
+            color: #007bff;
+        }
+
+        .url {
+            word-break: break-all;
+        }
+
+        .edit-link {
+            display: inline-block;
+            margin-top: 15px;
+            background-color: #28a745;
+            color: white;
+            padding: 8px 15px;
+            text-decoration: none;
+            border-radius: 5px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #f2f2f2;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-top: 20px;
+        }
+
+        .pagination a, .pagination span {
+            margin: 0 10px;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            text-decoration: none;
+            color: #007bff;
+            border-radius: 4px;
+        }
+
+        .pagination .disabled {
+            color: #ccc;
+            pointer-events: none;
+        }
+
+        .pagination .current {
+            font-weight: bold;
+            background-color: #007bff;
+            color: white;
+            border-color: #007bff;
+        }
+    </style>
+</head>
+<body>
+<div class="dashboard">
+    <h1>分析ダッシュボード</h1>
+
+    <div class="card">
+        <h2>総クリック数</h2>
+        <p class="stat" th:text="${urlMapping.clickCount}">1234</p>
+    </div>
+
+    <div class="card">
+        <h2>リンク情報</h2>
+        <p><strong>短縮URL:</strong> <a th:href="@{'/' + ${urlMapping.shortCode}}"
+                                        th:text="@{'http://localhost:8080/' + ${urlMapping.shortCode}}"
+                                        target="_blank"></a></p>
+        <p><strong>元のURL:</strong> <span class="url" th:text="${urlMapping.originalUrl}"></span></p>
+        <p th:if="${urlMapping.expirationTimestamp != null}">
+            <strong>有効期限:</strong> <span
+                th:text="${#temporals.format(urlMapping.expirationTimestamp, 'yyyy-MM-dd HH:mm')}"></span>
+        </p>
+        <a th:href="@{/edit/{code}(code=${urlMapping.shortCode})}" class="edit-link">このリンクを編集する</a>
+    </div>
+    <div class="card">
+        <h2>クリック履歴</h2>
+        <table>
+            <thead>
+            <tr>
+                <th>クリック日時</th>
+                <th>国</th>
+                <th>都市</th>
+                <th>どこから来たか</th>
+                <th>デバイス</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="event : ${clickEventsPage.content}">
+                <td th:text="${#temporals.format(event.clickTimestamp, 'yyyy-MM-dd HH:mm:ss')}"></td>
+                <td th:text="${event.country}"></td>
+                <td th:text="${event.city}"></td>
+                <td th:text="${event.referrer}"></td>
+                <td th:text="${event.deviceType}"></td>
+            </tr>
+            </tbody>
+        </table>
+
+        <div class="pagination" th:if="${clickEventsPage.totalPages > 1}">
+            <a th:href="@{/analytics/{code}(code=${urlMapping.shortCode}, page=${clickEventsPage.number - 1})}"
+               th:classappend="${clickEventsPage.first} ? 'disabled' : ''">
+                &laquo; 前へ
+            </a>
+            <span class="current"
+                  th:text="${clickEventsPage.number + 1} + ' / ' + ${clickEventsPage.totalPages}"></span>
+            <a th:href="@{/analytics/{code}(code=${urlMapping.shortCode}, page=${clickEventsPage.number + 1})}"
+               th:classappend="${clickEventsPage.last} ? 'disabled' : ''">
+                次へ &raquo;
+            </a>
+        </div>
+    </div>
+
+    <div style="text-align: center; margin-top: 30px;">
+        <a href="/">新しいURLを短縮する</a>
+    </div>
+</div>
+</body>
+</html>

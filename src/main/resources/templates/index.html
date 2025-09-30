@@ -3,12 +3,109 @@
 <head>
     <meta charset="UTF-8">
     <title>URL Shortener</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <style>
+        body {
+            font-family: sans-serif;
+            text-align: center;
+            margin-top: 50px;
+        }
+
+        .form-container {
+            display: inline-block;
+            text-align: left;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        input {
+            padding: 10px;
+            width: 400px;
+            box-sizing: border-box;
+        }
+
+        button {
+            padding: 10px 20px;
+        }
+
+        .error {
+            color: red;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .user-info {
+            position: absolute;
+            top: 10px;
+            right: 20px;
+            text-align: right;
+        }
+
+        .user-info form {
+            display: inline;
+        }
+
+        .user-info button {
+            padding: 5px 10px;
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+    </style>
 </head>
 <body>
+
+<div class="user-info" th:if="${username}">
+    <p style="margin: 0 0 5px 0;">ようこそ、<strong th:text="${username}">Guest</strong> さん！</p>
+    <form th:action="@{/logout}" method="post">
+        <button type="submit">ログアウト</button>
+    </form>
+</div>
+
 <h1>URL Shortener</h1>
+
+<div th:if="${error}" class="error">
+    <p th:text="${error}"></p>
+</div>
+
 <form action="/shorten" method="post">
-    <input type="url" name="originalUrl" placeholder="短くしたいURLを入力" required size="50">
-    <button type="submit">短縮！</button>
+    <div class="form-container">
+        <div class="form-group">
+            <label for="originalUrl">短くしたいURL</label>
+            <input type="url" id="originalUrl" name="originalUrl" required>
+        </div>
+        <div class="form-group">
+            <label for="customCode">カスタムURL (オプション)</label>
+            <input type="text" id="customCode" name="customCode" pattern="[a-zA-Z0-9-]+"
+                   title="英数字とハイフンのみ使用できます">
+        </div>
+        <div class="form-group">
+            <label for="expiration-input">有効期限 (オプション)</label>
+            <input type="text" id="expiration-input" name="expirationTimestamp" placeholder="クリックして日時を選択...">
+        </div>
+        <div style="text-align: center;">
+            <button type="submit">短縮！</button>
+        </div>
+    </div>
 </form>
+
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+    flatpickr("#expiration-input", {
+        enableTime: true,
+        dateFormat: "Y-m-d\\TH:i",
+        monthSelectorType: 'dropdown',
+        minuteIncrement: 15
+    });
+</script>
 </body>
 </html>
