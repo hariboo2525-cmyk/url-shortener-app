@@ -7,6 +7,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -16,8 +17,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
-import java.security.Principal;
 import java.time.LocalDateTime;
+import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -27,10 +29,12 @@ public class ShortUrlApplication {
 
     private final UrlMappingRepository urlMappingRepository;
     private final ClickEventRepository clickEventRepository;
+    private final UserRepository userRepository;
 
-    public ShortUrlApplication(UrlMappingRepository urlMappingRepository, ClickEventRepository clickEventRepository) {
+    public ShortUrlApplication(UrlMappingRepository urlMappingRepository, ClickEventRepository clickEventRepository, UserRepository userRepository) {
         this.urlMappingRepository = urlMappingRepository;
         this.clickEventRepository = clickEventRepository;
+        this.userRepository = userRepository;
     }
 
     public static void main(String[] args) {
@@ -38,9 +42,13 @@ public class ShortUrlApplication {
     }
 
     @GetMapping("/")
-    public String index(Model model, Principal principal) {
-        if (principal != null) {
-            model.addAttribute("username", principal.getName());
+    public String index(Model model, @AuthenticationPrincipal User user) {
+        if (user != null) {
+            model.addAttribute("username", user.getUsername());
+            List<UrlMapping> userUrls = urlMappingRepository.findAllByUser(user);
+            model.addAttribute("urls", userUrls);
+        } else {
+            model.addAttribute("urls", Collections.emptyList());
         }
         return "index";
     }
@@ -50,12 +58,16 @@ public class ShortUrlApplication {
                              @RequestParam(value = "customCode", required = false) String customCode,
                              @RequestParam(value = "expirationTimestamp", required = false)
                              @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime expirationTimestamp,
+                             @AuthenticationPrincipal User user,
                              Model model) {
 
         String shortCode;
         if (customCode != null && !customCode.trim().isEmpty()) {
             if (urlMappingRepository.findByShortCode(customCode).isPresent()) {
                 model.addAttribute("error", "このカスタムURLはすでに使用されています: " + customCode);
+                List<UrlMapping> userUrls = urlMappingRepository.findAllByUser(user);
+                model.addAttribute("urls", userUrls);
+                model.addAttribute("username", user.getUsername());
                 return "index";
             }
             shortCode = customCode.trim();
@@ -69,13 +81,10 @@ public class ShortUrlApplication {
         if (expirationTimestamp != null) {
             urlMapping.setExpirationTimestamp(expirationTimestamp);
         }
+        urlMapping.setUser(user);
         urlMappingRepository.save(urlMapping);
 
-        String shortenedUrl = "http://localhost:8080/" + shortCode;
-        model.addAttribute("shortenedUrl", shortenedUrl);
-        model.addAttribute("shortCode", shortCode);
-
-        return "result";
+        return "redirect:/";
     }
 
     @GetMapping("/{shortCode}")
@@ -128,16 +137,19 @@ public class ShortUrlApplication {
     @GetMapping("/analytics/{shortCode}")
     public String showAnalytics(@PathVariable("shortCode") String shortCode,
                                 @RequestParam(defaultValue = "0") int page,
+                                @AuthenticationPrincipal User currentUser,
                                 Model model) {
         Optional<UrlMapping> urlMappingOptional = urlMappingRepository.findByShortCode(shortCode);
 
         if (urlMappingOptional.isPresent()) {
             UrlMapping urlMapping = urlMappingOptional.get();
-            model.addAttribute("urlMapping", urlMapping);
+            if (currentUser == null || urlMapping.getUser() == null || !urlMapping.getUser().getId().equals(currentUser.getId())) {
+                return "error/404";
+            }
 
+            model.addAttribute("urlMapping", urlMapping);
             Pageable pageable = PageRequest.of(page, 10);
             Page<ClickEvent> clickEventsPage = clickEventRepository.findByUrlMappingOrderByClickTimestampDesc(urlMapping, pageable);
-
             model.addAttribute("clickEventsPage", clickEventsPage);
 
             return "analytics";
@@ -147,10 +159,16 @@ public class ShortUrlApplication {
     }
 
     @GetMapping("/edit/{shortCode}")
-    public String showEditPage(@PathVariable("shortCode") String shortCode, Model model) {
+    public String showEditPage(@PathVariable("shortCode") String shortCode,
+                               @AuthenticationPrincipal User currentUser,
+                               Model model) {
         Optional<UrlMapping> urlMappingOptional = urlMappingRepository.findByShortCode(shortCode);
         if (urlMappingOptional.isPresent()) {
-            model.addAttribute("urlMapping", urlMappingOptional.get());
+            UrlMapping urlMapping = urlMappingOptional.get();
+            if (currentUser == null || urlMapping.getUser() == null || !urlMapping.getUser().getId().equals(currentUser.getId())) {
+                return "error/404";
+            }
+            model.addAttribute("urlMapping", urlMapping);
             return "edit";
         } else {
             return "error/404";
@@ -160,10 +178,14 @@ public class ShortUrlApplication {
     @PostMapping("/update")
     public String updateUrl(@RequestParam("shortCode") String shortCode,
                             @RequestParam("originalUrl") String newOriginalUrl,
+                            @AuthenticationPrincipal User currentUser,
                             RedirectAttributes redirectAttributes) {
         Optional<UrlMapping> urlMappingOptional = urlMappingRepository.findByShortCode(shortCode);
         if (urlMappingOptional.isPresent()) {
             UrlMapping urlMapping = urlMappingOptional.get();
+            if (currentUser == null || urlMapping.getUser() == null || !urlMapping.getUser().getId().equals(currentUser.getId())) {
+                return "error/404";
+            }
             urlMapping.setOriginalUrl(newOriginalUrl);
             urlMappingRepository.save(urlMapping);
             return "redirect:/analytics/" + shortCode;
