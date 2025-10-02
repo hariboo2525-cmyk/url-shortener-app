@@ -105,12 +105,19 @@
             background-color: #f2f2f2;
         }
 
-        .status-badge {
-            padding: 4px 8px;
-            border-radius: 12px;
+        .status-badge-button {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 15px;
             font-size: 12px;
             font-weight: bold;
             color: white;
+            text-decoration: none;
+            transition: opacity 0.2s;
+        }
+
+        .status-badge-button:hover {
+            opacity: 0.8;
         }
 
         .status-ok {
@@ -186,11 +193,12 @@
                 <td th:text="${url.originalUrl}"></td>
                 <td th:text="${url.clickCount}"></td>
                 <td>
-                    <span th:switch="${url.status.name()}">
-                        <span th:case="'OK'" class="status-badge status-ok">正常</span>
-                        <span th:case="'BROKEN'" class="status-badge status-broken">リンク切れ</span>
-                        <span th:case="'UNCHECKED'" class="status-badge status-unchecked">未チェック</span>
-                    </span>
+                    <a th:href="@{/check/{code}(code=${url.shortCode})}" th:switch="${url.status.name()}"
+                       class="status-badge-button">
+                        <span th:case="'OK'">✔️ 正常</span>
+                        <span th:case="'BROKEN'">❌ リンク切れ</span>
+                        <span th:case="'UNCHECKED'">❔ 未チェック</span>
+                    </a>
                 </td>
                 <td>
                     <a th:href="@{/analytics/{code}(code=${url.shortCode})}">分析</a> |

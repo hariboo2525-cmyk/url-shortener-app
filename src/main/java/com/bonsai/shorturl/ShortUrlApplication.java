@@ -17,7 +17,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+import org.springframework.web.servlet.view.RedirectView;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -31,16 +33,21 @@ public class ShortUrlApplication {
     private final UrlMappingRepository urlMappingRepository;
     private final ClickEventRepository clickEventRepository;
     private final UserRepository userRepository;
+    private final LinkHealthCheckService linkHealthCheckService;
 
-    public ShortUrlApplication(UrlMappingRepository urlMappingRepository, ClickEventRepository clickEventRepository, UserRepository userRepository) {
+    public ShortUrlApplication(UrlMappingRepository urlMappingRepository, ClickEventRepository clickEventRepository, UserRepository userRepository, LinkHealthCheckService linkHealthCheckService) {
         this.urlMappingRepository = urlMappingRepository;
         this.clickEventRepository = clickEventRepository;
         this.userRepository = userRepository;
+        this.linkHealthCheckService = linkHealthCheckService;
     }
 
     public static void main(String[] args) {
         SpringApplication.run(ShortUrlApplication.class, args);
     }
+
+    // (他のメソッドは変更なし)
+    // ...
 
     @GetMapping("/")
     public String handleRootAccess(@AuthenticationPrincipal User user) {
@@ -131,7 +138,6 @@ public class ShortUrlApplication {
                 deviceType = "Mobile";
             }
 
-            // ★★★★★ IPアドレスも一緒に保存するように修正！ ★★★★★
             ClickEvent clickEvent = new ClickEvent(urlMapping, LocalDateTime.now(), country, city, referrer, deviceType, ipAddress);
             clickEventRepository.save(clickEvent);
 
@@ -165,33 +171,48 @@ public class ShortUrlApplication {
 
             List<ClickEvent> allClickEvents = clickEventRepository.findAllByUrlMapping(urlMapping);
 
-            // ★★★★★ 訪問ユーザー数を計算する処理を追加！ ★★★★★
             long uniqueUserCount = allClickEvents.stream()
                     .map(ClickEvent::getIpAddress)
                     .distinct()
                     .count();
             model.addAttribute("uniqueUserCount", uniqueUserCount);
-            // ★★★★★ ここまで ★★★★★
 
             long desktopCount = allClickEvents.stream().filter(e -> "Desktop".equals(e.getDeviceType())).count();
             long mobileCount = allClickEvents.stream().filter(e -> "Mobile".equals(e.getDeviceType())).count();
             model.addAttribute("desktopCount", desktopCount);
             model.addAttribute("mobileCount", mobileCount);
 
+            // ▼▼▼ 日別クリック数の計算ロジックをここから変更 ▼▼▼
+
+            // 1. まずは今まで通り、日付ごとのクリック数を集計しておく
             Map<String, Long> clicksByDate = allClickEvents.stream()
                     .collect(Collectors.groupingBy(
                             e -> e.getClickTimestamp().toLocalDate().format(DateTimeFormatter.ofPattern("MM/dd")),
                             Collectors.counting()
                     ));
 
-            List<String> dateLabels = new ArrayList<>(clicksByDate.keySet()).stream().sorted().toList();
+            // 2. グラフに表示するラベルとデータを入れるための空のリストを用意
+            List<String> dateLabels = new ArrayList<>();
             List<Long> clickCounts = new ArrayList<>();
-            for (String label : dateLabels) {
-                clickCounts.add(clicksByDate.get(label));
+
+            // 3. 今日から3日後までの4日間をループ処理
+            LocalDate today = LocalDate.now();
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("MM/dd");
+            for (int i = 0; i < 4; i++) {
+                LocalDate currentDate = today.plusDays(i);
+                String formattedDate = currentDate.format(formatter);
+
+                // ラベルリストに日付を追加
+                dateLabels.add(formattedDate);
+
+                // 集計したマップから該当日付のクリック数を取得（なければ0）して、データリストに追加
+                clickCounts.add(clicksByDate.getOrDefault(formattedDate, 0L));
             }
 
             model.addAttribute("dateLabels", dateLabels);
             model.addAttribute("clickCounts", clickCounts);
+
+            // ▲▲▲ 日別クリック数の計算ロジックの変更はここまで ▲▲▲
 
             return "analytics";
         } else {
@@ -234,25 +255,16 @@ public class ShortUrlApplication {
             return "error/404";
         }
     }
-}
 
-class IpApiResponse {
-    private String country;
-    private String city;
-
-    public String getCountry() {
-        return country;
-    }
-
-    public void setCountry(String country) {
-        this.country = country;
-    }
-
-    public String getCity() {
-        return city;
-    }
-
-    public void setCity(String city) {
-        this.city = city;
+    @GetMapping("/check/{shortCode}")
+    public RedirectView checkLinkNow(@PathVariable("shortCode") String shortCode, @AuthenticationPrincipal User currentUser) {
+        Optional<UrlMapping> urlMappingOptional = urlMappingRepository.findByShortCode(shortCode);
+        if (urlMappingOptional.isPresent()) {
+            UrlMapping urlMapping = urlMappingOptional.get();
+            if (currentUser != null && urlMapping.getUser() != null && urlMapping.getUser().getId().equals(currentUser.getId())) {
+                linkHealthCheckService.checkSingleLink(urlMapping);
+            }
+        }
+        return new RedirectView("/dashboard");
     }
 }
