@@ -17,11 +17,11 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.Collections;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @SpringBootApplication
 @Controller
@@ -148,6 +148,47 @@ public class ShortUrlApplication {
             }
 
             model.addAttribute("urlMapping", urlMapping);
+            List<ClickEvent> allClickEvents = clickEventRepository.findAllByUrlMapping(urlMapping);
+
+            // --- 円グラフ用の集計処理 ---
+            long desktopCount = allClickEvents.stream()
+                    .filter(event -> "Desktop".equals(event.getDeviceType()))
+                    .count();
+            long mobileCount = allClickEvents.stream()
+                    .filter(event -> "Mobile".equals(event.getDeviceType()))
+                    .count();
+            model.addAttribute("desktopCount", desktopCount);
+            model.addAttribute("mobileCount", mobileCount);
+
+            // --- 棒グラフ用の集計処理 ---
+            LocalDate startDate = allClickEvents.stream()
+                    .map(event -> event.getClickTimestamp().toLocalDate())
+                    .min(LocalDate::compareTo)
+                    .orElse(LocalDate.now());
+
+            LocalDate endDate = LocalDate.now().plusDays(3);
+
+            Map<LocalDate, Long> clicksByDate = new TreeMap<>();
+            for (LocalDate date = startDate; !date.isAfter(endDate); date = date.plusDays(1)) {
+                clicksByDate.put(date, 0L);
+            }
+
+            Map<LocalDate, Long> actualClicks = allClickEvents.stream()
+                    .collect(Collectors.groupingBy(
+                            event -> event.getClickTimestamp().toLocalDate(),
+                            Collectors.counting()
+                    ));
+
+            clicksByDate.putAll(actualClicks);
+
+            List<String> dateLabels = clicksByDate.keySet().stream()
+                    .map(date -> date.format(DateTimeFormatter.ofPattern("MM/dd")))
+                    .collect(Collectors.toList());
+            List<Long> clickCounts = new ArrayList<>(clicksByDate.values());
+
+            model.addAttribute("dateLabels", dateLabels);
+            model.addAttribute("clickCounts", clickCounts);
+
             Pageable pageable = PageRequest.of(page, 10);
             Page<ClickEvent> clickEventsPage = clickEventRepository.findByUrlMappingOrderByClickTimestampDesc(urlMapping, pageable);
             model.addAttribute("clickEventsPage", clickEventsPage);
@@ -168,7 +209,7 @@ public class ShortUrlApplication {
             if (currentUser == null || urlMapping.getUser() == null || !urlMapping.getUser().getId().equals(currentUser.getId())) {
                 return "error/404";
             }
-            model.addAttribute("urlMapping", urlMapping);
+            model.addAttribute("urlMapping", urlMappingOptional.get());
             return "edit";
         } else {
             return "error/404";
