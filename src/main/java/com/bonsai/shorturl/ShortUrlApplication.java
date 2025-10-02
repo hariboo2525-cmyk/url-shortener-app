@@ -98,12 +98,13 @@ public class ShortUrlApplication {
                 return "expired";
             }
 
-            String ipAddress = request.getRemoteAddr();
-            if ("0:0:0:0:0:0:0:1".equals(ipAddress) || "127.0.0.1".equals(ipAddress)) {
-                ipAddress = "8.8.8.8";
+            String realIpAddress = request.getRemoteAddr();
+            String apiIpAddress = realIpAddress;
+            if ("0:0:0:0:0:0:0:1".equals(apiIpAddress) || "127.0.0.1".equals(apiIpAddress)) {
+                apiIpAddress = "8.8.8.8"; // テスト用のIP
             }
 
-            String apiUrl = "http://ip-api.com/json/" + ipAddress;
+            String apiUrl = "http://ip-api.com/json/" + apiIpAddress;
             RestTemplate restTemplate = new RestTemplate();
             IpApiResponse response = restTemplate.getForObject(apiUrl, IpApiResponse.class);
 
@@ -121,7 +122,8 @@ public class ShortUrlApplication {
                 deviceType = "Mobile";
             }
 
-            ClickEvent clickEvent = new ClickEvent(urlMapping, LocalDateTime.now(), country, city, referrer, deviceType);
+            // ★コンストラクタに realIpAddress を追加！★
+            ClickEvent clickEvent = new ClickEvent(urlMapping, LocalDateTime.now(), country, city, referrer, deviceType, realIpAddress);
             clickEventRepository.save(clickEvent);
 
             urlMapping.incrementClickCount();
@@ -150,7 +152,12 @@ public class ShortUrlApplication {
             model.addAttribute("urlMapping", urlMapping);
             List<ClickEvent> allClickEvents = clickEventRepository.findAllByUrlMapping(urlMapping);
 
-            // --- 円グラフ用の集計処理 ---
+            long uniqueClickCount = allClickEvents.stream()
+                    .map(ClickEvent::getIpAddress)
+                    .distinct()
+                    .count();
+            model.addAttribute("uniqueClickCount", uniqueClickCount);
+
             long desktopCount = allClickEvents.stream()
                     .filter(event -> "Desktop".equals(event.getDeviceType()))
                     .count();
@@ -160,7 +167,6 @@ public class ShortUrlApplication {
             model.addAttribute("desktopCount", desktopCount);
             model.addAttribute("mobileCount", mobileCount);
 
-            // --- 棒グラフ用の集計処理 ---
             LocalDate startDate = allClickEvents.stream()
                     .map(event -> event.getClickTimestamp().toLocalDate())
                     .min(LocalDate::compareTo)

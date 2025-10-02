@@ -20,19 +20,22 @@ public class ClickEvent {
     private String city;
     private String referrer;
     private String deviceType;
+    private String ipAddress; // ★これを追加！
 
     public ClickEvent() {
     }
 
-    public ClickEvent(UrlMapping urlMapping, LocalDateTime clickTimestamp, String country, String city, String referrer, String deviceType) {
+    public ClickEvent(UrlMapping urlMapping, LocalDateTime clickTimestamp, String country, String city, String referrer, String deviceType, String ipAddress) {
         this.urlMapping = urlMapping;
         this.clickTimestamp = clickTimestamp;
         this.country = country;
         this.city = city;
         this.referrer = referrer;
         this.deviceType = deviceType;
+        this.ipAddress = ipAddress; // ★これを追加！
     }
 
+    // Getters
     public Long getId() {
         return id;
     }
@@ -60,4 +63,8 @@ public class ClickEvent {
     public String getDeviceType() {
         return deviceType;
     }
+
+    public String getIpAddress() {
+        return ipAddress;
+    } // ★これを追加！
 }

@@ -2,7 +2,7 @@
 <html lang="ja" xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
-    <title>分析ダッシュボード</title>
+    <title>パフォーマンス</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
     <style>
@@ -123,12 +123,17 @@
 </head>
 <body>
 <div class="dashboard">
-    <h1>分析ダッシュボード</h1>
+    <h1>パフォーマンス</h1>
 
     <div class="card-container">
         <div class="card">
-            <h2>総クリック数</h2>
+            <h2>アクセス数</h2>
             <p class="stat" th:text="${urlMapping.clickCount}">1234</p>
+        </div>
+
+        <div class="card">
+            <h2>訪問ユーザー数</h2>
+            <p class="stat" th:text="${uniqueClickCount}">800</p>
         </div>
 
         <div class="card" th:if="${desktopCount > 0 or mobileCount > 0}">
@@ -167,7 +172,7 @@
                 <th>クリック日時</th>
                 <th>国</th>
                 <th>都市</th>
-                <th>どこから来たか</th>
+                <th>流入元</th>
                 <th>デバイス</th>
             </tr>
             </thead>
@@ -268,6 +273,9 @@
                 },
                 plugins: {
                     legend: {
+                        display: false
+                    },
+                    datalabels: {
                         display: false
                     }
                 }
