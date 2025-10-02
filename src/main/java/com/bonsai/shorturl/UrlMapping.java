@@ -20,6 +20,9 @@ public class UrlMapping {
 
     private LocalDateTime expirationTimestamp;
 
+    @Enumerated(EnumType.STRING)
+    private LinkStatus status = LinkStatus.UNCHECKED;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
     private User user;
@@ -31,8 +34,6 @@ public class UrlMapping {
         this.shortCode = shortCode;
         this.originalUrl = originalUrl;
     }
-
-    // Getters and Setters ...
 
     public String getOriginalUrl() {
         return originalUrl;
@@ -72,5 +73,13 @@ public class UrlMapping {
 
     public void setUser(User user) {
         this.user = user;
+    }
+
+    public LinkStatus getStatus() {
+        return status;
+    }
+
+    public void setStatus(LinkStatus status) {
+        this.status = status;
     }
 }

@@ -7,6 +7,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -17,13 +18,13 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
 @SpringBootApplication
+@EnableScheduling
 @Controller
 public class ShortUrlApplication {
 
@@ -42,16 +43,24 @@ public class ShortUrlApplication {
     }
 
     @GetMapping("/")
-    public String index(Model model, @AuthenticationPrincipal User user) {
+    public String handleRootAccess(@AuthenticationPrincipal User user) {
         if (user != null) {
-            model.addAttribute("username", user.getUsername());
-            List<UrlMapping> userUrls = urlMappingRepository.findAllByUser(user);
-            model.addAttribute("urls", userUrls);
-        } else {
-            model.addAttribute("urls", Collections.emptyList());
+            return "redirect:/dashboard";
         }
         return "index";
     }
+
+    @GetMapping("/dashboard")
+    public String dashboard(Model model, @AuthenticationPrincipal User user) {
+        if (user == null) {
+            return "redirect:/login";
+        }
+        model.addAttribute("username", user.getUsername());
+        List<UrlMapping> userUrls = urlMappingRepository.findAllByUser(user);
+        model.addAttribute("urls", userUrls);
+        return "dashboard";
+    }
+
 
     @PostMapping("/shorten")
     public String shortenUrl(@RequestParam("originalUrl") String originalUrl,
@@ -59,16 +68,17 @@ public class ShortUrlApplication {
                              @RequestParam(value = "expirationTimestamp", required = false)
                              @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime expirationTimestamp,
                              @AuthenticationPrincipal User user,
-                             Model model) {
+                             RedirectAttributes redirectAttributes) {
+
+        if (user == null) {
+            return "redirect:/login";
+        }
 
         String shortCode;
         if (customCode != null && !customCode.trim().isEmpty()) {
             if (urlMappingRepository.findByShortCode(customCode).isPresent()) {
-                model.addAttribute("error", "このカスタムURLはすでに使用されています: " + customCode);
-                List<UrlMapping> userUrls = urlMappingRepository.findAllByUser(user);
-                model.addAttribute("urls", userUrls);
-                model.addAttribute("username", user.getUsername());
-                return "index";
+                redirectAttributes.addFlashAttribute("error", "このカスタムURLはすでに使用されています: " + customCode);
+                return "redirect:/dashboard";
             }
             shortCode = customCode.trim();
         } else {
@@ -84,7 +94,7 @@ public class ShortUrlApplication {
         urlMapping.setUser(user);
         urlMappingRepository.save(urlMapping);
 
-        return "redirect:/";
+        return "redirect:/dashboard";
     }
 
     @GetMapping("/{shortCode}")
@@ -98,13 +108,12 @@ public class ShortUrlApplication {
                 return "expired";
             }
 
-            String realIpAddress = request.getRemoteAddr();
-            String apiIpAddress = realIpAddress;
-            if ("0:0:0:0:0:0:0:1".equals(apiIpAddress) || "127.0.0.1".equals(apiIpAddress)) {
-                apiIpAddress = "8.8.8.8"; // テスト用のIP
+            String ipAddress = request.getRemoteAddr();
+            if ("0:0:0:0:0:0:0:1".equals(ipAddress) || "127.0.0.1".equals(ipAddress)) {
+                ipAddress = "8.8.8.8";
             }
 
-            String apiUrl = "http://ip-api.com/json/" + apiIpAddress;
+            String apiUrl = "http://ip-api.com/json/" + ipAddress;
             RestTemplate restTemplate = new RestTemplate();
             IpApiResponse response = restTemplate.getForObject(apiUrl, IpApiResponse.class);
 
@@ -122,8 +131,8 @@ public class ShortUrlApplication {
                 deviceType = "Mobile";
             }
 
-            // ★コンストラクタに realIpAddress を追加！★
-            ClickEvent clickEvent = new ClickEvent(urlMapping, LocalDateTime.now(), country, city, referrer, deviceType, realIpAddress);
+            // ★★★★★ IPアドレスも一緒に保存するように修正！ ★★★★★
+            ClickEvent clickEvent = new ClickEvent(urlMapping, LocalDateTime.now(), country, city, referrer, deviceType, ipAddress);
             clickEventRepository.save(clickEvent);
 
             urlMapping.incrementClickCount();
@@ -150,54 +159,39 @@ public class ShortUrlApplication {
             }
 
             model.addAttribute("urlMapping", urlMapping);
-            List<ClickEvent> allClickEvents = clickEventRepository.findAllByUrlMapping(urlMapping);
-
-            long uniqueClickCount = allClickEvents.stream()
-                    .map(ClickEvent::getIpAddress)
-                    .distinct()
-                    .count();
-            model.addAttribute("uniqueClickCount", uniqueClickCount);
-
-            long desktopCount = allClickEvents.stream()
-                    .filter(event -> "Desktop".equals(event.getDeviceType()))
-                    .count();
-            long mobileCount = allClickEvents.stream()
-                    .filter(event -> "Mobile".equals(event.getDeviceType()))
-                    .count();
-            model.addAttribute("desktopCount", desktopCount);
-            model.addAttribute("mobileCount", mobileCount);
-
-            LocalDate startDate = allClickEvents.stream()
-                    .map(event -> event.getClickTimestamp().toLocalDate())
-                    .min(LocalDate::compareTo)
-                    .orElse(LocalDate.now());
-
-            LocalDate endDate = LocalDate.now().plusDays(3);
-
-            Map<LocalDate, Long> clicksByDate = new TreeMap<>();
-            for (LocalDate date = startDate; !date.isAfter(endDate); date = date.plusDays(1)) {
-                clicksByDate.put(date, 0L);
-            }
-
-            Map<LocalDate, Long> actualClicks = allClickEvents.stream()
-                    .collect(Collectors.groupingBy(
-                            event -> event.getClickTimestamp().toLocalDate(),
-                            Collectors.counting()
-                    ));
-
-            clicksByDate.putAll(actualClicks);
-
-            List<String> dateLabels = clicksByDate.keySet().stream()
-                    .map(date -> date.format(DateTimeFormatter.ofPattern("MM/dd")))
-                    .collect(Collectors.toList());
-            List<Long> clickCounts = new ArrayList<>(clicksByDate.values());
-
-            model.addAttribute("dateLabels", dateLabels);
-            model.addAttribute("clickCounts", clickCounts);
-
             Pageable pageable = PageRequest.of(page, 10);
             Page<ClickEvent> clickEventsPage = clickEventRepository.findByUrlMappingOrderByClickTimestampDesc(urlMapping, pageable);
             model.addAttribute("clickEventsPage", clickEventsPage);
+
+            List<ClickEvent> allClickEvents = clickEventRepository.findAllByUrlMapping(urlMapping);
+
+            // ★★★★★ 訪問ユーザー数を計算する処理を追加！ ★★★★★
+            long uniqueUserCount = allClickEvents.stream()
+                    .map(ClickEvent::getIpAddress)
+                    .distinct()
+                    .count();
+            model.addAttribute("uniqueUserCount", uniqueUserCount);
+            // ★★★★★ ここまで ★★★★★
+
+            long desktopCount = allClickEvents.stream().filter(e -> "Desktop".equals(e.getDeviceType())).count();
+            long mobileCount = allClickEvents.stream().filter(e -> "Mobile".equals(e.getDeviceType())).count();
+            model.addAttribute("desktopCount", desktopCount);
+            model.addAttribute("mobileCount", mobileCount);
+
+            Map<String, Long> clicksByDate = allClickEvents.stream()
+                    .collect(Collectors.groupingBy(
+                            e -> e.getClickTimestamp().toLocalDate().format(DateTimeFormatter.ofPattern("MM/dd")),
+                            Collectors.counting()
+                    ));
+
+            List<String> dateLabels = new ArrayList<>(clicksByDate.keySet()).stream().sorted().toList();
+            List<Long> clickCounts = new ArrayList<>();
+            for (String label : dateLabels) {
+                clickCounts.add(clicksByDate.get(label));
+            }
+
+            model.addAttribute("dateLabels", dateLabels);
+            model.addAttribute("clickCounts", clickCounts);
 
             return "analytics";
         } else {
@@ -215,7 +209,7 @@ public class ShortUrlApplication {
             if (currentUser == null || urlMapping.getUser() == null || !urlMapping.getUser().getId().equals(currentUser.getId())) {
                 return "error/404";
             }
-            model.addAttribute("urlMapping", urlMappingOptional.get());
+            model.addAttribute("urlMapping", urlMapping);
             return "edit";
         } else {
             return "error/404";

@@ -1,165 +1,74 @@
 <!DOCTYPE html>
-<html lang="ja" xmlns:th="http://www.thymeleaf.org">
+<html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>URL Shortener</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <title>ようこそ！ - URL Shortener</title>
     <style>
         body {
             font-family: sans-serif;
             text-align: center;
-            margin-top: 50px;
+            margin-top: 100px;
+            background-color: #f4f7f6;
         }
 
         .container {
-            max-width: 800px;
+            max-width: 600px;
             margin: auto;
-        }
-
-        .form-container {
-            display: inline-block;
-            text-align: left;
-            border: 1px solid #ddd;
-            padding: 20px;
+            padding: 40px;
+            background-color: white;
             border-radius: 8px;
-            margin-bottom: 40px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
         }
 
-        .form-group {
-            margin-bottom: 15px;
+        h1 {
+            color: #333;
         }
 
-        label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
+        p {
+            color: #555;
+            font-size: 1.1em;
         }
 
-        input {
-            padding: 10px;
-            width: 400px;
-            box-sizing: border-box;
+        .actions {
+            margin-top: 40px;
         }
 
-        button {
-            padding: 10px 20px;
-        }
-
-        .error {
-            color: red;
-            margin-bottom: 15px;
-            text-align: center;
-        }
-
-        .user-info {
-            position: absolute;
-            top: 10px;
-            right: 20px;
-            text-align: right;
-        }
-
-        .user-info form {
-            display: inline;
-        }
-
-        .user-info button {
-            padding: 5px 10px;
-            background-color: #6c757d;
+        .btn {
+            display: inline-block;
+            padding: 15px 30px;
+            margin: 0 10px;
+            text-decoration: none;
             color: white;
-            border: none;
-            cursor: pointer;
+            border-radius: 5px;
+            font-size: 16px;
+            transition: background-color 0.3s;
         }
 
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
+        .btn-login {
+            background-color: #007bff;
         }
 
-        th, td {
-            border: 1px solid #ddd;
-            padding: 8px;
-            text-align: left;
-            word-break: break-all;
+        .btn-login:hover {
+            background-color: #0056b3;
         }
 
-        th {
-            background-color: #f2f2f2;
+        .btn-register {
+            background-color: #28a745;
+        }
+
+        .btn-register:hover {
+            background-color: #1e7e34;
         }
     </style>
 </head>
 <body>
 <div class="container">
-    <div class="user-info" th:if="${username}">
-        <p style="margin: 0 0 5px 0;">ようこそ、<strong th:text="${username}">Guest</strong> さん！</p>
-        <form th:action="@{/logout}" method="post">
-            <button type="submit">ログアウト</button>
-        </form>
+    <h1>URL Shortenerへようこそ！</h1>
+    <p>長いURLを短く、覚えやすいリンクに変換します。<br>始めるにはログインまたは新規登録をしてください。</p>
+    <div class="actions">
+        <a href="/login" class="btn btn-login">ログイン</a>
+        <a href="/register" class="btn btn-register">新規登録</a>
     </div>
-
-    <h1>URL Shortener</h1>
-
-    <div th:if="${error}" class="error">
-        <p th:text="${error}"></p>
-    </div>
-
-    <form th:action="@{/shorten}" method="post">
-        <div class="form-container">
-            <div class="form-group">
-                <label for="originalUrl">短くしたいURL</label>
-                <input type="url" id="originalUrl" name="originalUrl" required>
-            </div>
-            <div class="form-group">
-                <label for="customCode">カスタムURL (オプション)</label>
-                <input type="text" id="customCode" name="customCode" pattern="[a-zA-Z0--9-]+"
-                       title="英数字とハイフンのみ使用できます">
-            </div>
-            <div class="form-group">
-                <label for="expiration-input">有効期限 (オプション)</label>
-                <input type="text" id="expiration-input" name="expirationTimestamp"
-                       placeholder="クリックして日時を選択...">
-            </div>
-            <div style="text-align: center;">
-                <button type="submit">短縮！</button>
-            </div>
-        </div>
-    </form>
-
-    <h2>マイリンク一覧</h2>
-    <div th:if="${urls.isEmpty()}">
-        <p>まだ短縮URLは作成されていません。</p>
-    </div>
-    <table th:unless="${urls.isEmpty()}">
-        <thead>
-        <tr>
-            <th>短縮URL</th>
-            <th>元のURL</th>
-            <th>クリック数</th>
-            <th>操作</th>
-        </tr>
-        </thead>
-        <tbody>
-        <tr th:each="url : ${urls}">
-            <td><a th:href="@{'/' + ${url.shortCode}}" th:text="@{'/' + ${url.shortCode}}" target="_blank"></a></td>
-            <td th:text="${url.originalUrl}"></td>
-            <td th:text="${url.clickCount}"></td>
-            <td>
-                <a th:href="@{/analytics/{code}(code=${url.shortCode})}">分析</a> |
-                <a th:href="@{/edit/{code}(code=${url.shortCode})}">編集</a>
-            </td>
-        </tr>
-        </tbody>
-    </table>
 </div>
-
-<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-<script>
-    flatpickr("#expiration-input", {
-        enableTime: true,
-        dateFormat: "Y-m-d\\TH:i",
-        monthSelectorType: 'dropdown',
-        minuteIncrement: 15
-    });
-</script>
 </body>
 </html>

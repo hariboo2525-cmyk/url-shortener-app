@@ -2,25 +2,32 @@
 <html lang="ja" xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
-    <title>パフォーマンス</title>
+    <title>パフォーマンス分析</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
     <style>
         body {
             font-family: sans-serif;
-            margin: 40px;
+            margin: 20px 40px;
             background-color: #f4f7f6;
+            color: #333;
         }
 
-        .dashboard {
-            max-width: 800px;
+        .container {
+            max-width: 1000px;
             margin: auto;
         }
 
-        .card-container {
+        h1, h2 {
+            text-align: center;
+            color: #333;
+        }
+
+        .top-cards {
             display: flex;
+            justify-content: space-around;
             gap: 20px;
-            margin-bottom: 20px;
+            margin-bottom: 30px;
         }
 
         .card {
@@ -30,50 +37,41 @@
             padding: 20px;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
             flex: 1;
-        }
-
-        .full-width-card {
-            width: 100%;
-            box-sizing: border-box;
-            margin-bottom: 20px;
-            background-color: white;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            padding: 20px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
-
-        h1 {
             text-align: center;
-            color: #333;
         }
 
-        h2 {
+        .card h2 {
+            font-size: 1.2em;
+            margin-top: 0;
+            color: #555;
             border-bottom: 2px solid #eee;
             padding-bottom: 10px;
-            color: #555;
-            margin-top: 0;
         }
 
         .stat {
             font-size: 3em;
             font-weight: bold;
-            text-align: center;
             color: #007bff;
         }
 
-        .url {
-            word-break: break-all;
+        .chart-container {
+            position: relative;
+            margin: auto;
+            height: 180px;
+            width: 180px;
         }
 
-        .edit-link {
-            display: inline-block;
-            margin-top: 15px;
-            background-color: #28a745;
-            color: white;
-            padding: 8px 15px;
-            text-decoration: none;
-            border-radius: 5px;
+        .controls {
+            background-color: #e9ecef;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .controls label {
+            margin: 0 15px;
+            font-weight: bold;
         }
 
         table {
@@ -84,12 +82,13 @@
 
         th, td {
             border: 1px solid #ddd;
-            padding: 8px;
+            padding: 12px;
             text-align: left;
+            word-break: break-all;
         }
 
         th {
-            background-color: #f2f2f2;
+            background-color: #f8f9fa;
         }
 
         .pagination {
@@ -119,52 +118,57 @@
             color: white;
             border-color: #007bff;
         }
+
+        .nav-links {
+            text-align: center;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+        }
+
+        .nav-links a {
+            margin: 0 15px;
+            text-decoration: none;
+            color: #007bff;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
-<div class="dashboard">
+<div class="container">
     <h1>パフォーマンス</h1>
 
-    <div class="card-container">
+    <div class="top-cards">
         <div class="card">
             <h2>アクセス数</h2>
-            <p class="stat" th:text="${urlMapping.clickCount}">1234</p>
+            <p class="stat" th:text="${urlMapping.clickCount}">0</p>
         </div>
-
         <div class="card">
             <h2>訪問ユーザー数</h2>
-            <p class="stat" th:text="${uniqueClickCount}">800</p>
+            <p class="stat" th:text="${uniqueUserCount}">0</p>
         </div>
-
-        <div class="card" th:if="${desktopCount > 0 or mobileCount > 0}">
+        <div class="card">
             <h2>デバイス比率</h2>
-            <div style="max-width: 200px; margin: auto; position: relative;">
+            <div class="chart-container">
                 <canvas id="deviceChart"></canvas>
             </div>
         </div>
     </div>
 
-    <div class="full-width-card" th:if="${!clickCounts.isEmpty()}">
+    <div class="controls">
+        <label>グラフ・詳細表示:</label>
+        <input type="checkbox" id="toggle-daily" checked>
+        <label for="toggle-daily">日別クリック数</label>
+        <input type="checkbox" id="toggle-history" checked>
+        <label for="toggle-history">クリック履歴</label>
+    </div>
+
+    <div id="daily-clicks-card" class="card">
         <h2>日別クリック数</h2>
-        <div>
-            <canvas id="dailyClicksChart"></canvas>
-        </div>
+        <canvas id="dailyClicksChart" height="100"></canvas>
     </div>
 
-    <div class="full-width-card">
-        <h2>リンク情報</h2>
-        <p><strong>短縮URL:</strong> <a th:href="@{'/' + ${urlMapping.shortCode}}"
-                                        th:text="@{'http://localhost:8080/' + ${urlMapping.shortCode}}"
-                                        target="_blank"></a></p>
-        <p><strong>元のURL:</strong> <span class="url" th:text="${urlMapping.originalUrl}"></span></p>
-        <p th:if="${urlMapping.expirationTimestamp != null}">
-            <strong>有効期限:</strong> <span
-                th:text="${#temporals.format(urlMapping.expirationTimestamp, 'yyyy-MM-dd HH:mm')}"></span>
-        </p>
-        <a th:href="@{/edit/{code}(code=${urlMapping.shortCode})}" class="edit-link">このリンクを編集する</a>
-    </div>
-
-    <div class="full-width-card">
+    <div id="click-history-card" class="card">
         <h2>クリック履歴</h2>
         <table>
             <thead>
@@ -177,6 +181,9 @@
             </tr>
             </thead>
             <tbody>
+            <tr th:if="${clickEventsPage.empty}">
+                <td colspan="5" style="text-align: center;">クリック履歴はまだありません。</td>
+            </tr>
             <tr th:each="event : ${clickEventsPage.content}">
                 <td th:text="${#temporals.format(event.clickTimestamp, 'yyyy-MM-dd HH:mm:ss')}"></td>
                 <td th:text="${event.country}"></td>
@@ -189,101 +196,116 @@
 
         <div class="pagination" th:if="${clickEventsPage.totalPages > 1}">
             <a th:href="@{/analytics/{code}(code=${urlMapping.shortCode}, page=${clickEventsPage.number - 1})}"
-               th:classappend="${clickEventsPage.first} ? 'disabled' : ''">&laquo; 前へ</a>
+               th:classappend="${clickEventsPage.first} ? 'disabled' : ''">
+                &laquo; 前へ
+            </a>
             <span class="current"
                   th:text="${clickEventsPage.number + 1} + ' / ' + ${clickEventsPage.totalPages}"></span>
             <a th:href="@{/analytics/{code}(code=${urlMapping.shortCode}, page=${clickEventsPage.number + 1})}"
-               th:classappend="${clickEventsPage.last} ? 'disabled' : ''">次へ &raquo;</a>
+               th:classappend="${clickEventsPage.last} ? 'disabled' : ''">
+                次へ &raquo;
+            </a>
         </div>
     </div>
 
-    <div style="text-align: center; margin-top: 30px;">
-        <a href="/">新しいURLを短縮する</a>
+    <div class="nav-links">
+        <a th:href="@{/edit/{code}(code=${urlMapping.shortCode})}">このリンクを編集する</a>
+        <a href="/dashboard">ダッシュボードに戻る</a>
     </div>
+
 </div>
 
 <script th:inline="javascript">
-    /*<![CDATA[*/
-    // --- 円グラフの描画処理 ---
-    const desktopCount = /*[[${desktopCount}]]*/ 0;
-    const mobileCount = /*[[${mobileCount}]]*/ 0;
-    if (desktopCount > 0 || mobileCount > 0) {
-        Chart.register(ChartDataLabels);
-        const ctx = document.getElementById('deviceChart').getContext('2d');
-        const deviceChart = new Chart(ctx, {
-            type: 'pie',
-            data: {
-                labels: ['PC', 'スマホ'],
-                datasets: [{
-                    label: 'デバイス比率',
-                    data: [desktopCount, mobileCount],
-                    backgroundColor: ['rgba(54, 162, 235, 0.8)', 'rgba(255, 99, 132, 0.8)'],
-                    borderColor: ['rgba(54, 162, 235, 1)', 'rgba(255, 99, 132, 1)'],
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: true,
-                plugins: {
-                    legend: {
-                        position: 'top',
-                    },
-                    datalabels: {
-                        formatter: (value, context) => {
-                            const sum = context.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
-                            const percentage = (value * 100 / sum).toFixed(1) + '%';
-                            return percentage;
-                        },
-                        color: '#fff',
-                        font: {
-                            weight: 'bold'
-                        }
-                    }
-                }
-            }
-        });
-    }
+    document.addEventListener('DOMContentLoaded', function () {
+        // --- グラフ描画処理 ---
 
-    // --- 棒グラフの描画処理 ---
-    const dateLabels = /*[[${dateLabels}]]*/ [];
-    const clickCounts = /*[[${clickCounts}]]*/ [];
-    if (clickCounts.length > 0) {
-        const barCtx = document.getElementById('dailyClicksChart').getContext('2d');
-        const dailyClicksChart = new Chart(barCtx, {
-            type: 'bar',
-            data: {
-                labels: dateLabels,
-                datasets: [{
-                    label: 'クリック数',
-                    data: clickCounts,
-                    backgroundColor: 'rgba(75, 192, 192, 0.8)',
-                    borderColor: 'rgba(75, 192, 192, 1)',
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            precision: 0
-                        }
-                    }
+        // 1. デバイス比率（円グラフ）
+        const desktopCount = /*[[${desktopCount}]]*/ 0;
+        const mobileCount = /*[[${mobileCount}]]*/ 0;
+
+        if (desktopCount > 0 || mobileCount > 0) {
+            Chart.register(ChartDataLabels);
+            const deviceCtx = document.getElementById('deviceChart').getContext('2d');
+            new Chart(deviceCtx, {
+                type: 'pie',
+                data: {
+                    labels: ['PC', 'スマホ'],
+                    datasets: [{
+                        data: [desktopCount, mobileCount],
+                        backgroundColor: ['rgba(54, 162, 235, 0.8)', 'rgba(255, 99, 132, 0.8)'],
+                        borderColor: ['rgba(54, 162, 235, 1)', 'rgba(255, 99, 132, 1)'],
+                        borderWidth: 1
+                    }]
                 },
-                plugins: {
-                    legend: {
-                        display: false
-                    },
-                    datalabels: {
-                        display: false
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {position: 'top'},
+                        datalabels: {
+                            formatter: (value, context) => {
+                                const sum = context.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
+                                if (sum === 0) return '0%';
+                                return (value * 100 / sum).toFixed(1) + '%';
+                            },
+                            color: '#fff',
+                            font: {weight: 'bold'}
+                        }
                     }
                 }
-            }
-        });
-    }
-    /*]]>*/
-</script>
+            });
+        }
 
+        // 2. 日別クリック数（棒グラフ）
+        const dateLabels = /*[[${dateLabels}]]*/ [];
+        const clickCounts = /*[[${clickCounts}]]*/ [];
+        if (dateLabels.length > 0) {
+            const dailyCtx = document.getElementById('dailyClicksChart').getContext('2d');
+            new Chart(dailyCtx, {
+                type: 'bar',
+                data: {
+                    labels: dateLabels,
+                    datasets: [{
+                        label: 'クリック数',
+                        data: clickCounts,
+                        backgroundColor: 'rgba(75, 192, 192, 0.8)',
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {display: false}
+                    }
+                }
+            });
+        }
+
+        // --- チェックボックスによる表示切替処理 ---
+        const toggleDaily = document.getElementById('toggle-daily');
+        const toggleHistory = document.getElementById('toggle-history');
+        const dailyCard = document.getElementById('daily-clicks-card');
+        const historyCard = document.getElementById('click-history-card');
+
+        function updateVisibility() {
+            dailyCard.style.display = toggleDaily.checked ? 'block' : 'none';
+            historyCard.style.display = toggleHistory.checked ? 'block' : 'none';
+        }
+
+        toggleDaily.addEventListener('change', updateVisibility);
+        toggleHistory.addEventListener('change', updateVisibility);
+
+        // 初期表示を設定
+        updateVisibility();
+    });
+</script>
 </body>
 </html>

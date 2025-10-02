@@ -20,11 +20,12 @@ public class ClickEvent {
     private String city;
     private String referrer;
     private String deviceType;
-    private String ipAddress; // ★これを追加！
+    private String ipAddress; // ★ IPアドレスを保存する変数を追加！
 
     public ClickEvent() {
     }
 
+    // ★ コンストラクタに ipAddress を追加！
     public ClickEvent(UrlMapping urlMapping, LocalDateTime clickTimestamp, String country, String city, String referrer, String deviceType, String ipAddress) {
         this.urlMapping = urlMapping;
         this.clickTimestamp = clickTimestamp;
@@ -32,10 +33,9 @@ public class ClickEvent {
         this.city = city;
         this.referrer = referrer;
         this.deviceType = deviceType;
-        this.ipAddress = ipAddress; // ★これを追加！
+        this.ipAddress = ipAddress; // ★ 追加
     }
 
-    // Getters
     public Long getId() {
         return id;
     }
@@ -64,7 +64,8 @@ public class ClickEvent {
         return deviceType;
     }
 
+    // ★ ipAddress のための Getter を追加！
     public String getIpAddress() {
         return ipAddress;
-    } // ★これを追加！
+    }
 }

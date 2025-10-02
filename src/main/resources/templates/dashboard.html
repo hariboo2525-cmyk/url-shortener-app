@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="ja" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>ダッシュボード - URL Shortener</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f7f6;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        .user-info {
+            text-align: right;
+        }
+
+        .user-info form {
+            display: inline;
+        }
+
+        .user-info button {
+            padding: 8px 12px;
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .card {
+            background-color: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 25px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        input[type="url"], input[type="text"] {
+            padding: 10px;
+            width: 100%;
+            box-sizing: border-box;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+        }
+
+        button[type="submit"] {
+            padding: 12px 25px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .error {
+            color: red;
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+            word-break: break-all;
+        }
+
+        th {
+            background-color: #f2f2f2;
+        }
+
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+            color: white;
+        }
+
+        .status-ok {
+            background-color: #28a745;
+        }
+
+        .status-broken {
+            background-color: #dc3545;
+        }
+
+        .status-unchecked {
+            background-color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>ダッシュボード</h1>
+        <div class="user-info" th:if="${username}">
+            <p style="margin: 0 0 10px 0;">ようこそ、<strong th:text="${username}">Guest</strong> さん！</p>
+            <form th:action="@{/logout}" method="post">
+                <button type="submit">ログアウト</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>新しいURLを短縮する</h2>
+        <div th:if="${error}" class="error">
+            <p th:text="${error}"></p>
+        </div>
+        <form th:action="@{/shorten}" method="post">
+            <div class="form-group">
+                <label for="originalUrl">短くしたいURL</label>
+                <input type="url" id="originalUrl" name="originalUrl" placeholder="https://example.com" required>
+            </div>
+            <div class="form-group">
+                <label for="customCode">カスタムURL (オプション)</label>
+                <input type="text" id="customCode" name="customCode" pattern="[a-zA-Z0-9-]+"
+                       title="英数字とハイフンのみ使用できます" placeholder="my-custom-link">
+            </div>
+            <div class="form-group">
+                <label for="expiration-input">有効期限 (オプション)</label>
+                <input type="text" id="expiration-input" name="expirationTimestamp"
+                       placeholder="クリックして日時を選択...">
+            </div>
+            <div style="text-align: center; margin-top: 20px;">
+                <button type="submit">短縮！</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="card">
+        <h2>マイリンク一覧</h2>
+        <div th:if="${urls != null and urls.isEmpty()}">
+            <p>まだ短縮URLは作成されていません。</p>
+        </div>
+        <table th:if="${urls != null and !urls.isEmpty()}">
+            <thead>
+            <tr>
+                <th>短縮URL</th>
+                <th>元のURL</th>
+                <th>クリック数</th>
+                <th>ステータス</th>
+                <th>操作</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="url : ${urls}">
+                <td><a th:href="@{'/' + ${url.shortCode}}" th:text="@{'http://localhost:8080/' + ${url.shortCode}}"
+                       target="_blank"></a></td>
+                <td th:text="${url.originalUrl}"></td>
+                <td th:text="${url.clickCount}"></td>
+                <td>
+                    <span th:switch="${url.status.name()}">
+                        <span th:case="'OK'" class="status-badge status-ok">正常</span>
+                        <span th:case="'BROKEN'" class="status-badge status-broken">リンク切れ</span>
+                        <span th:case="'UNCHECKED'" class="status-badge status-unchecked">未チェック</span>
+                    </span>
+                </td>
+                <td>
+                    <a th:href="@{/analytics/{code}(code=${url.shortCode})}">分析</a> |
+                    <a th:href="@{/edit/{code}(code=${url.shortCode})}">編集</a>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://npmcdn.com/flatpickr/dist/l10n/ja.js"></script>
+<script>
+    flatpickr("#expiration-input", {
+        enableTime: true,
+        dateFormat: "Y-m-d\\TH:i",
+        locale: "ja"
+    });
+</script>
+
+</body>
+</html>
